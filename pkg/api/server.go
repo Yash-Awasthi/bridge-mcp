@@ -14,6 +14,7 @@ import (
 
 	"open-board/pkg/agents"
 	"open-board/pkg/cloud"
+	"open-board/pkg/connectors"
 	"open-board/pkg/db"
 	"open-board/pkg/grammar"
 	"open-board/pkg/locks"
@@ -36,6 +37,7 @@ type Server struct {
 	Wake       *wake.Launcher
 	Cloud      *cloud.Config
 	Supervisor *agents.Supervisor
+	Connectors *connectors.Manager
 	Log        Logger
 
 	mu      sync.Mutex
@@ -120,6 +122,10 @@ func (s *Server) Handler(ui http.Handler) http.Handler {
 	mux.HandleFunc("/api/agents/terminate", s.handleAgentTerminate)
 	mux.HandleFunc("/api/tasks/requeue", s.handleTaskRequeue)
 	mux.HandleFunc("/api/join", s.handleJoin)
+	mux.HandleFunc("/api/connectors", s.handleConnectors)
+	mux.HandleFunc("/api/connectors/tools", s.handleConnectorTools)
+	mux.HandleFunc("/api/connectors/call", s.handleConnectorCall)
+	mux.HandleFunc("/api/connectors/presets", s.handleConnectorPresets)
 
 	return securityHeaders(mux)
 }

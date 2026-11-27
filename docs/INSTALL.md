@@ -145,6 +145,27 @@ Some products cannot take a stdio server from a file on disk:
   Copy the `mcpServers` snippet from `vb install --dry-run` into that UI if it accepts
   a command and arguments, or point it at the same command and `mcp` argument.
 
+## Connectors (optional, separate from install)
+
+`vb install` wires the board itself into an MCP client. A **connector** is the reverse: a
+local MCP server the board may call. Clients need no extra configuration for connectors —
+they arrive as the `board_connectors` and `board_connector_call` tools.
+
+The easiest path is the inspector (`vb serve`, then the Connectors panel): pick a preset,
+add it, press **Tools**, run one. The same thing from a shell:
+
+```bash
+vb connector add rubrik --preset rubrik   # uvx rubrik-mcp; needs RSC_SERVICE_ACCOUNT_FILE
+vb connector add files --preset filesystem
+vb connector add mine npx -y my-mcp-server
+vb connector tools rubrik
+vb connector call rubrik rsc_get_clusters '{}'
+```
+
+Nothing starts until a connector is used; each child stops after five idle minutes. Every
+tool the server advertises is allowed; add names to `deny` in `.board/connectors.json` to
+block them. Credentials are inherited from the environment and never stored by the board.
+
 ## Troubleshooting
 
 | Symptom | Cause and fix |

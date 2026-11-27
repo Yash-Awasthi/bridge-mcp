@@ -11,6 +11,8 @@ optional Cloudflare R2 snapshots. State is one SQLite database per channel, in W
 - **Mentions** (`@name`, `@all`) plus per-agent cursors mean an agent only reads what is new.
 - **Slices** (`%*% path target`) answer with a fragment of a file instead of a whole repo.
 - **Supervised runs** hand a task to a real agent CLI: claim, stream its output, complete on exit 0.
+- **Connectors** (optional) let agents call any local MCP server — Rubrik, a filesystem server, your own —
+  with no cloud dependency and no process running until you add one.
 - **Mission Control** streams agent logs and gives a human force-requeue, terminate and unlock controls.
 - **One-command install** (`vb install`) wires the MCP server into Claude Desktop, Claude Code,
   Antigravity, Cursor, Windsurf, VS Code, Cline, Roo, Zed, Codex, Grok, Gemini, Qwen, OpenCode
@@ -50,8 +52,9 @@ On Linux or macOS use `-o vb` and `-o mcp-bridge`.
 ./vb discover                                # which agent CLIs this machine has
 ```
 
-Open <http://127.0.0.1:4100> for the inspector: live message river, task board, file
-locks, agent roster, a streaming agent console, and expandable tasks with human
+Open <http://127.0.0.1:4100> for the inspector: a chat-first board with `@` tagging, a live verb
+preview and Enter-to-send, light and dark themes, and a `☰` panel for threads, agents, file
+locks, the work list, connectors and the run log. Tasks expand in place with human
 tie-breaker controls.
 
 ## Commands
@@ -80,6 +83,7 @@ tie-breaker controls.
 | `vb mcp` | Run the stdio MCP server in this process |
 | `vb discover [--manifests <dir>]` | Find installed coding agents from the embedded manifests |
 | `vb launch [--dir .board] <agent-id> [args...]` | Launch an agent detached, logging under `<dir>/<channel>/agents/` |
+| `vb connector list\|add\|remove\|tools\|call\|presets` | Optional local MCP servers exposed as board tools |
 
 Global flags work before or after the command: `--server <url>` (env `VB_URL`),
 `--channel <name>` (env `VB_CHANNEL`), and `--json` for one JSON document.
@@ -147,7 +151,8 @@ Gemini CLI, Qwen Code, OpenCode and OpenClaw.
 
 `vb mcp` and `mcp-bridge.exe` both speak newline-delimited JSON-RPC 2.0 on stdin/stdout with
 no SDK. Tools: `board_post`, `board_tail`, `board_inbox`, `board_threads`, `board_agents`,
-`board_tasks`, `board_claim`, `board_done`, `board_lock`, `board_unlock`, `board_slice`.
+`board_tasks`, `board_claim`, `board_done`, `board_lock`, `board_unlock`, `board_slice`,
+`board_connectors`, `board_connector_call`.
 
 A single entry looks like this (the installer fills in the absolute path):
 
@@ -231,6 +236,26 @@ credentials. Secrets are read from the environment only; nothing is written into
 With R2 configured, the broker also uploads a snapshot automatically when the last open
 task in a thread is finished, so a completed sprint is backed up without anyone running a
 command.
+
+## Connectors (optional)
+
+A connector is any local MCP server (stdio) the board may call. The board starts it lazily on
+first use and stops it when idle; with no `connectors.json`, nothing changes at all.
+
+```bash
+./vb connector add rubrik --preset rubrik     # uvx rubrik-mcp
+./vb connector add files --preset filesystem  # npx @modelcontextprotocol/server-filesystem .
+./vb connector tools rubrik
+./vb connector call rubrik rsc_get_clusters
+```
+
+Every call is also one line in the inspector's **Connectors** panel, so no terminal is needed:
+pick a connector, press **Tools**, choose a tool, run it. Agents reach the same thing through
+`board_connector_call`, so any MCP client `vb install` supports gets connectors for free.
+
+Config lives in `.board/connectors.json` (`command`, `args`, optional `env`, optional `deny`).
+Credentials come from the environment — the board passes it through and never reads or stores a
+secret. Presets: `rubrik`, `filesystem`.
 
 ## Development
 

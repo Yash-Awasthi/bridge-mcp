@@ -24,6 +24,7 @@ import (
 	"open-board/pkg/agents"
 	"open-board/pkg/api"
 	"open-board/pkg/cloud"
+	"open-board/pkg/connectors"
 	"open-board/pkg/db"
 	"open-board/pkg/grammar"
 	"open-board/pkg/install"
@@ -103,6 +104,8 @@ func run(argv []string) int {
 		return cmdLaunch(g, rest)
 	case "status":
 		return cmdStatus(g, rest)
+	case "connector", "connectors":
+		return cmdConnector(g, rest)
 	default:
 		fmt.Fprintf(os.Stderr, "error: unknown command %q\n\n", cmd)
 		printUsage()
@@ -136,6 +139,7 @@ usage:
   vb mcp
   vb discover [--manifests <dir>]
   vb launch [--dir .board] <agent-id> [args...]
+  vb connector list|add|remove|tools|call|presets
 
 global flags (any position):
   --server <url>     broker URL (default http://127.0.0.1:4100, env VB_URL)
@@ -151,6 +155,7 @@ examples:
   vb tasks create sprint-1 "fix the lock reaper" --contract "locks.Manager"
   vb claim --next sprint-1 --as cline --wait 5m
   vb tail sprint-1 --follow
+  vb connector add rubrik --preset rubrik   # optional local MCP server
 `)
 }
 
@@ -335,6 +340,7 @@ func cmdServe(g global, args []string) int {
 	dir := fs.String("dir", ".board", "board directory")
 	channel := fs.String("channel", g.channel, "default channel")
 	wakePath := fs.String("wake", "", "wake config (default <dir>/wake.json)")
+	connectorsPath := fs.String("connectors", "", "connectors file (default <dir>/connectors.json)")
 	pos, ok := parse(fs, args)
 	if !ok {
 		return 2
@@ -375,6 +381,17 @@ func cmdServe(g global, args []string) int {
 	srv.Wake = launcher
 	srv.Cloud = &cloudConfig
 	srv.Log = daemon
+
+	connectorFile := *connectorsPath
+	if connectorFile == "" {
+		connectorFile = filepath.Join(store.Dir(), "connectors.json")
+	}
+	connectorMgr, err := connectors.NewManager(connectorFile, version, daemon.Printf)
+	if err != nil {
+		return fail(err)
+	}
+	defer connectorMgr.Close()
+	srv.Connectors = connectorMgr
 
 	supervisor := agents.NewSupervisor(registry, store.Dir())
 	supervisor.Logf = daemon.Printf
@@ -458,6 +475,9 @@ func cmdServe(g global, args []string) int {
 	fmt.Printf("board    http://%s\n", addr)
 	fmt.Printf("dir      %s\n", store.Dir())
 	fmt.Printf("channel  %s\n", *channel)
+	if list := connectorMgr.List(); len(list) > 0 {
+		fmt.Printf("plugins  %d connector(s) in %s\n", len(list), connectorMgr.Path())
+	}
 
 	select {
 	case err := <-errCh:

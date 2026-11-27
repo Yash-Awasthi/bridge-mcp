@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -255,6 +256,17 @@ func toolDefinitions() []map[string]any {
 				"path":   str("File path"),
 				"target": str("Symbol name or line range such as 10-60"),
 			}, "path"),
+		tool("board_connectors", "List the optional local MCP servers (connectors) configured for this board, with their tools. Use this before board_connector_call.",
+			map[string]any{
+				"connector": str("Optional: one connector name to list its tools"),
+			}),
+		tool("board_connector_call", "Call a tool on a configured local MCP server (for example rubrik). Ask board_connectors first for valid names.",
+			map[string]any{
+				"connector": str("Connector name"),
+				"tool":      str("Tool name on that connector"),
+				"arguments": map[string]any{"type": "object", "description": "Tool arguments as a JSON object"},
+				"thread":    str("Optional thread to note the call on"),
+			}, "connector", "tool"),
 	}
 }
 
@@ -399,6 +411,39 @@ func callTool(ctx context.Context, c *Client, name string, raw json.RawMessage) 
 			return "", err
 		}
 		return slice.Extract(args.Path, args.Target)
+	case "board_connectors":
+		var args struct {
+			Connector string `json:"connector"`
+		}
+		if len(raw) > 0 {
+			if err := json.Unmarshal(raw, &args); err != nil {
+				return "", err
+			}
+		}
+		if args.Connector != "" {
+			var out json.RawMessage
+			err := c.call(ctx, http.MethodGet, "/api/connectors/tools?name="+url.QueryEscape(args.Connector), nil, &out)
+			return pretty(out), err
+		}
+		var out json.RawMessage
+		err := c.call(ctx, http.MethodGet, "/api/connectors", nil, &out)
+		return pretty(out), err
+	case "board_connector_call":
+		var args struct {
+			Connector string         `json:"connector"`
+			Tool      string         `json:"tool"`
+			Arguments map[string]any `json:"arguments"`
+			Thread    string         `json:"thread"`
+		}
+		if err := json.Unmarshal(raw, &args); err != nil {
+			return "", err
+		}
+		var out json.RawMessage
+		err := c.call(ctx, http.MethodPost, "/api/connectors/call", map[string]any{
+			"channel": c.Channel, "thread": args.Thread, "connector": args.Connector,
+			"tool": args.Tool, "arguments": args.Arguments,
+		}, &out)
+		return pretty(out), err
 	default:
 		return "", fmt.Errorf("unknown tool %q", name)
 	}
